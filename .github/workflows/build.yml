@@ -64,9 +64,6 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             label: macOS-arm64
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            label: macOS-x64
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             label: Linux-x64
@@ -144,7 +141,6 @@ jobs:
             | Platform | File |
             |----------|------|
             | macOS (Apple Silicon) | `.dmg` |
-            | macOS (Intel) | `.dmg` |
             | Linux | `.deb` / `.AppImage` |
             | Windows | `.msi` / `.exe` |
           releaseDraft: false
