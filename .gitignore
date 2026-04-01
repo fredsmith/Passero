@@ -1,0 +1,8 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+.vite/
+*.swp
+*.swo
+.DS_Store
