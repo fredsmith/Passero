@@ -3,6 +3,7 @@ mod error;
 mod git;
 mod gpg;
 mod pass;
+mod path;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

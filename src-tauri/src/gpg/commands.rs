@@ -24,6 +24,7 @@ pub async fn list_gpg_keys(app: tauri::AppHandle) -> Result<Vec<GpgKey>> {
 
     let output = Command::new(&gpg_binary)
         .args(["--list-keys", "--with-colons", "--batch", "--no-tty"])
+        .env("PATH", crate::path::augmented_path())
         .output()
         .await?;
 

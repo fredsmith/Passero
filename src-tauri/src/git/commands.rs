@@ -28,6 +28,12 @@ fn store_dir(app: &tauri::AppHandle) -> Result<String> {
         }))
 }
 
+fn git_cmd(binary: &str) -> Command {
+    let mut cmd = Command::new(binary);
+    cmd.env("PATH", crate::path::augmented_path());
+    cmd
+}
+
 fn git_binary(app: &tauri::AppHandle) -> Result<String> {
     let store = app
         .store("config.json")
@@ -44,7 +50,7 @@ pub async fn git_pull(app: tauri::AppHandle) -> Result<String> {
     let dir = store_dir(&app)?;
     let git = git_binary(&app)?;
 
-    let output = Command::new(&git)
+    let output = git_cmd(&git)
         .args(["pull"])
         .current_dir(&dir)
         .output()
@@ -64,7 +70,7 @@ pub async fn git_push(app: tauri::AppHandle) -> Result<String> {
     let dir = store_dir(&app)?;
     let git = git_binary(&app)?;
 
-    let output = Command::new(&git)
+    let output = git_cmd(&git)
         .args(["push"])
         .current_dir(&dir)
         .output()
@@ -85,7 +91,7 @@ pub async fn git_log(app: tauri::AppHandle, count: Option<u32>) -> Result<Vec<Gi
     let git = git_binary(&app)?;
     let count = count.unwrap_or(20);
 
-    let output = Command::new(&git)
+    let output = git_cmd(&git)
         .args([
             "log",
             &format!("-{}", count),
@@ -130,7 +136,7 @@ pub async fn git_clone(app: tauri::AppHandle, url: String, path: Option<String>)
             .to_string()
     });
 
-    let output = Command::new(&git)
+    let output = git_cmd(&git)
         .args(["clone", &url, &target])
         .output()
         .await?;

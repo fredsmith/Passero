@@ -35,6 +35,7 @@ impl PassStore {
     fn command(&self) -> Command {
         let mut cmd = Command::new(&self.pass_binary);
         cmd.env("PASSWORD_STORE_DIR", &self.store_dir);
+        cmd.env("PATH", crate::path::augmented_path());
         cmd
     }
 
