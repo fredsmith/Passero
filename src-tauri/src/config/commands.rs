@@ -1,9 +1,8 @@
-use super::model::AppConfig;
+use super::model::{AppConfig, Vault};
 use crate::error::{PasseroError, Result};
 use tauri_plugin_store::StoreExt;
 
-#[tauri::command]
-pub async fn get_config(app: tauri::AppHandle) -> Result<AppConfig> {
+fn load_config(app: &tauri::AppHandle) -> Result<(AppConfig, std::sync::Arc<tauri_plugin_store::Store<tauri::Wry>>)> {
     let store = app
         .store("config.json")
         .map_err(|e: tauri_plugin_store::Error| PasseroError::ConfigError(e.to_string()))?;
@@ -25,17 +24,22 @@ pub async fn get_config(app: tauri::AppHandle) -> Result<AppConfig> {
             .get("clipboard_timeout")
             .and_then(|v: serde_json::Value| v.as_u64())
             .unwrap_or(45) as u32,
+        vaults: store
+            .get("vaults")
+            .and_then(|v: serde_json::Value| serde_json::from_value(v).ok())
+            .unwrap_or_default(),
+        active_vault_id: store
+            .get("active_vault_id")
+            .and_then(|v: serde_json::Value| v.as_str().map(String::from)),
     };
 
-    Ok(config)
+    Ok((config, store))
 }
 
-#[tauri::command]
-pub async fn set_config(app: tauri::AppHandle, config: AppConfig) -> Result<()> {
-    let store = app
-        .store("config.json")
-        .map_err(|e: tauri_plugin_store::Error| PasseroError::ConfigError(e.to_string()))?;
-
+fn save_config(
+    store: &std::sync::Arc<tauri_plugin_store::Store<tauri::Wry>>,
+    config: &AppConfig,
+) -> Result<()> {
     if let Some(ref v) = config.pass_binary {
         store.set("pass_binary", serde_json::json!(v));
     } else {
@@ -57,6 +61,12 @@ pub async fn set_config(app: tauri::AppHandle, config: AppConfig) -> Result<()> 
         store.delete("password_store_dir");
     }
     store.set("clipboard_timeout", serde_json::json!(config.clipboard_timeout));
+    store.set("vaults", serde_json::json!(config.vaults));
+    if let Some(ref v) = config.active_vault_id {
+        store.set("active_vault_id", serde_json::json!(v));
+    } else {
+        store.delete("active_vault_id");
+    }
 
     store
         .save()
@@ -65,22 +75,98 @@ pub async fn set_config(app: tauri::AppHandle, config: AppConfig) -> Result<()> 
     Ok(())
 }
 
+/// Get the effective password store directory, considering active vault.
+pub(crate) fn get_effective_store_dir(app: &tauri::AppHandle) -> Result<Option<String>> {
+    let (config, _store) = load_config(app)?;
+
+    if let Some(ref active_id) = config.active_vault_id {
+        if let Some(vault) = config.vaults.iter().find(|v| &v.id == active_id) {
+            return Ok(Some(vault.path.clone()));
+        }
+    }
+
+    Ok(config.password_store_dir.clone())
+}
+
+#[tauri::command]
+pub async fn get_config(app: tauri::AppHandle) -> Result<AppConfig> {
+    let (config, _store) = load_config(&app)?;
+    Ok(config)
+}
+
+#[tauri::command]
+pub async fn set_config(app: tauri::AppHandle, config: AppConfig) -> Result<()> {
+    let (_old, store) = load_config(&app)?;
+    save_config(&store, &config)
+}
+
 #[tauri::command]
 pub async fn get_password_store_path(app: tauri::AppHandle) -> Result<String> {
-    let store = app
-        .store("config.json")
-        .map_err(|e: tauri_plugin_store::Error| PasseroError::ConfigError(e.to_string()))?;
-
-    let path = store
-        .get("password_store_dir")
-        .and_then(|v: serde_json::Value| v.as_str().map(String::from))
-        .unwrap_or_else(|| {
-            dirs::home_dir()
-                .unwrap_or_default()
-                .join(".password-store")
-                .to_string_lossy()
-                .to_string()
-        });
-
+    let path = get_effective_store_dir(&app)?.unwrap_or_else(|| {
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(".password-store")
+            .to_string_lossy()
+            .to_string()
+    });
     Ok(path)
+}
+
+#[tauri::command]
+pub async fn list_vaults(app: tauri::AppHandle) -> Result<Vec<Vault>> {
+    let (config, _store) = load_config(&app)?;
+    Ok(config.vaults)
+}
+
+#[tauri::command]
+pub async fn add_vault(app: tauri::AppHandle, name: String, path: String) -> Result<Vault> {
+    let (mut config, store) = load_config(&app)?;
+
+    let id = format!("vault_{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis());
+
+    let vault = Vault {
+        id: id.clone(),
+        name,
+        path,
+    };
+
+    config.vaults.push(vault.clone());
+
+    // If this is the first vault, make it active
+    if config.vaults.len() == 1 {
+        config.active_vault_id = Some(id);
+    }
+
+    save_config(&store, &config)?;
+    Ok(vault)
+}
+
+#[tauri::command]
+pub async fn remove_vault(app: tauri::AppHandle, id: String) -> Result<()> {
+    let (mut config, store) = load_config(&app)?;
+
+    config.vaults.retain(|v| v.id != id);
+
+    if config.active_vault_id.as_deref() == Some(&id) {
+        config.active_vault_id = config.vaults.first().map(|v| v.id.clone());
+    }
+
+    save_config(&store, &config)
+}
+
+#[tauri::command]
+pub async fn set_active_vault(app: tauri::AppHandle, id: Option<String>) -> Result<()> {
+    let (mut config, store) = load_config(&app)?;
+
+    if let Some(ref vault_id) = id {
+        if !config.vaults.iter().any(|v| &v.id == vault_id) {
+            return Err(PasseroError::ConfigError("Vault not found".into()));
+        }
+    }
+
+    config.active_vault_id = id;
+    save_config(&store, &config)
 }

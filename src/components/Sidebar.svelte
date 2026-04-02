@@ -2,6 +2,7 @@
   import { ui } from "$lib/stores/ui.svelte";
   import { gitPull, gitPush } from "$lib/commands";
   import { passwords } from "$lib/stores/passwords.svelte";
+  import VaultSwitcher from "./VaultSwitcher.svelte";
 
   async function handleSync(action: "pull" | "push") {
     try {
@@ -46,6 +47,15 @@
     </button>
     <button
       class="w-full text-left px-3 py-2 rounded text-sm transition-colors {ui.currentView ===
+      'gpg'
+        ? 'bg-zinc-800 text-white'
+        : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'}"
+      onclick={() => ui.navigate("gpg")}
+    >
+      GPG Keys
+    </button>
+    <button
+      class="w-full text-left px-3 py-2 rounded text-sm transition-colors {ui.currentView ===
       'settings'
         ? 'bg-zinc-800 text-white'
         : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'}"
@@ -54,6 +64,10 @@
       Settings
     </button>
   </nav>
+
+  <div class="p-2 border-t border-zinc-800">
+    <VaultSwitcher />
+  </div>
 
   <div class="p-2 border-t border-zinc-800 space-y-1">
     <button

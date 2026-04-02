@@ -150,6 +150,43 @@ impl PassStore {
         Ok(())
     }
 
+    /// Read the .gpg-id file and return the list of recipient key IDs.
+    pub async fn list_recipients(&self) -> Result<Vec<String>> {
+        let gpg_id_path = self.store_dir.join(".gpg-id");
+        if !gpg_id_path.exists() {
+            return Ok(vec![]);
+        }
+        let content = tokio::fs::read_to_string(&gpg_id_path).await?;
+        Ok(content
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect())
+    }
+
+    /// Re-initialize the store with the given GPG key IDs (runs `pass init`).
+    /// This updates .gpg-id and re-encrypts all entries.
+    pub async fn init_store(&self, gpg_ids: &[String]) -> Result<()> {
+        if gpg_ids.is_empty() {
+            return Err(PasseroError::PassError(
+                "At least one GPG key ID is required".into(),
+            ));
+        }
+
+        let mut args = vec!["init".to_string()];
+        for id in gpg_ids {
+            args.push(id.clone());
+        }
+
+        let output = self.command().args(&args).output().await?;
+        if !output.status.success() {
+            return Err(PasseroError::PassError(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn generate(
         &self,
         path: &str,

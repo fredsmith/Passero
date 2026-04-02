@@ -27,3 +27,8 @@ tokio = { version = "1", features = ["process", "fs"] }
 thiserror = "2"
 dirs = "6"
 log = "0.4"
+totp-rs = { version = "5", features = ["otpauth"] }
+url = "2"
+urlencoding = "2"
+image = "0.25"
+rqrr = "0.9"

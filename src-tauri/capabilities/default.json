@@ -13,6 +13,7 @@
     "store:allow-load",
     "dialog:allow-message",
     "dialog:allow-ask",
+    "dialog:allow-open",
     "core:window:allow-start-dragging",
     "core:window:allow-set-theme"
   ]

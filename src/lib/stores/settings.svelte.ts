@@ -8,6 +8,8 @@ class SettingsStore {
     git_binary: null,
     password_store_dir: null,
     clipboard_timeout: 45,
+    vaults: [],
+    active_vault_id: null,
   });
   loading = $state(false);
   error = $state<string | null>(null);

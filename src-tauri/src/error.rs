@@ -10,6 +10,8 @@ pub enum PasseroError {
     GitError(String),
     #[error("Config error: {0}")]
     ConfigError(String),
+    #[error("TOTP error: {0}")]
+    TotpError(String),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }

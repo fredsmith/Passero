@@ -11,6 +11,8 @@ export interface AppConfig {
   git_binary: string | null;
   password_store_dir: string | null;
   clipboard_timeout: number;
+  vaults: Vault[];
+  active_vault_id: string | null;
 }
 
 export interface GpgKey {
@@ -27,4 +29,22 @@ export interface GitLogEntry {
   date: string;
 }
 
-export type View = "main" | "settings" | "generator";
+export interface TotpCode {
+  code: string;
+  remaining_seconds: number;
+  period: number;
+}
+
+export interface TotpInfo {
+  issuer: string | null;
+  account: string | null;
+  uri: string;
+}
+
+export interface Vault {
+  id: string;
+  name: string;
+  path: string;
+}
+
+export type View = "main" | "settings" | "generator" | "gpg";
