@@ -38,7 +38,8 @@
 ### Homebrew (macOS)
 
 ```bash
-brew install fredsmith/tap/passero
+brew tap fredsmith/passero https://github.com/fredsmith/Passero
+brew install --cask passero
 ```
 
 ### Download
