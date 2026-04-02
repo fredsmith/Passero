@@ -35,7 +35,17 @@
 
 ## Install
 
-Download the latest release from [Releases](https://github.com/fredsmith/Passero/releases), or build from source:
+### Homebrew (macOS)
+
+```bash
+brew install fredsmith/tap/passero
+```
+
+### Download
+
+Grab the latest release from [Releases](https://github.com/fredsmith/Passero/releases).
+
+### Build from source
 
 ```bash
 git clone https://github.com/fredsmith/Passero.git
