@@ -1,8 +1,8 @@
 cask "passero" do
-  version "2026.4.2-3"
+  version "2026.4.2-4"
 
   url "https://github.com/fredsmith/Passero/releases/download/v#{version}/Passero_#{version}_aarch64.dmg"
-  sha256 "0c1b53e5475adf2b9282ee92dd2ab06dc9270bfd51d9cfb82025c7012bf099c4" # :arm64
+  sha256 "de315e365a6dab0820d97065987ac38a453144f0b8ac270f0a2a2cab3a478e4f" # :arm64
 
   name "Passero"
   desc "Desktop GUI for pass, the standard Unix password manager"
