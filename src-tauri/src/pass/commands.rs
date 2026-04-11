@@ -3,6 +3,8 @@ use crate::error::{PasseroError, Result};
 use tauri_plugin_store::StoreExt;
 
 pub(crate) fn make_store(app: &tauri::AppHandle) -> Result<PassStore> {
+    let store_dir = crate::config::commands::get_effective_store_dir(app)?;
+
     let store = app
         .store("config.json")
         .map_err(|e: tauri_plugin_store::Error| PasseroError::ConfigError(e.to_string()))?;
@@ -11,31 +13,7 @@ pub(crate) fn make_store(app: &tauri::AppHandle) -> Result<PassStore> {
         .get("pass_binary")
         .and_then(|v: serde_json::Value| v.as_str().map(String::from));
 
-    // Determine effective store dir: check active vault first, fall back to password_store_dir
-    let store_dir = resolve_store_dir(&store);
-
     Ok(PassStore::new(pass_binary, store_dir))
-}
-
-fn resolve_store_dir(store: &std::sync::Arc<tauri_plugin_store::Store<tauri::Wry>>) -> Option<String> {
-    let active_vault_id = store
-        .get("active_vault_id")
-        .and_then(|v: serde_json::Value| v.as_str().map(String::from));
-
-    if let Some(ref active_id) = active_vault_id {
-        let vaults: Vec<crate::config::model::Vault> = store
-            .get("vaults")
-            .and_then(|v: serde_json::Value| serde_json::from_value(v).ok())
-            .unwrap_or_default();
-
-        if let Some(vault) = vaults.iter().find(|v| &v.id == active_id) {
-            return Some(vault.path.clone());
-        }
-    }
-
-    store
-        .get("password_store_dir")
-        .and_then(|v: serde_json::Value| v.as_str().map(String::from))
 }
 
 #[tauri::command]

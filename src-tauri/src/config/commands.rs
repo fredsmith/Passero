@@ -78,14 +78,7 @@ fn save_config(
 /// Get the effective password store directory, considering active vault.
 pub(crate) fn get_effective_store_dir(app: &tauri::AppHandle) -> Result<Option<String>> {
     let (config, _store) = load_config(app)?;
-
-    if let Some(ref active_id) = config.active_vault_id {
-        if let Some(vault) = config.vaults.iter().find(|v| &v.id == active_id) {
-            return Ok(Some(vault.path.clone()));
-        }
-    }
-
-    Ok(config.password_store_dir.clone())
+    Ok(config.effective_store_dir().map(String::from))
 }
 
 #[tauri::command]
