@@ -12,20 +12,15 @@ pub struct GitLogEntry {
 }
 
 fn store_dir(app: &tauri::AppHandle) -> Result<String> {
-    let store = app
-        .store("config.json")
-        .map_err(|e: tauri_plugin_store::Error| PasseroError::ConfigError(e.to_string()))?;
-
-    Ok(store
-        .get("password_store_dir")
-        .and_then(|v: serde_json::Value| v.as_str().map(String::from))
-        .unwrap_or_else(|| {
+    crate::config::commands::get_effective_store_dir(app).map(|opt| {
+        opt.unwrap_or_else(|| {
             dirs::home_dir()
                 .unwrap_or_default()
                 .join(".password-store")
                 .to_string_lossy()
                 .to_string()
-        }))
+        })
+    })
 }
 
 fn git_cmd(binary: &str) -> Command {

@@ -47,4 +47,4 @@ export interface Vault {
   path: string;
 }
 
-export type View = "main" | "settings" | "generator" | "gpg";
+export type View = "main" | "settings" | "gpg";

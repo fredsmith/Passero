@@ -2,7 +2,7 @@
   import Sidebar from "./components/Sidebar.svelte";
   import MainView from "./views/MainView.svelte";
   import SettingsView from "./views/SettingsView.svelte";
-  import GeneratorView from "./views/GeneratorView.svelte";
+
   import GpgView from "./views/GpgView.svelte";
   import { ui } from "$lib/stores/ui.svelte";
   import { passwords } from "$lib/stores/passwords.svelte";
@@ -31,8 +31,6 @@
       <MainView />
     {:else if ui.currentView === "settings"}
       <SettingsView />
-    {:else if ui.currentView === "generator"}
-      <GeneratorView />
     {:else if ui.currentView === "gpg"}
       <GpgView />
     {/if}

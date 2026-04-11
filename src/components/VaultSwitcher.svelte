@@ -1,13 +1,61 @@
 <script lang="ts">
   import { settings } from "$lib/stores/settings.svelte";
   import { passwords } from "$lib/stores/passwords.svelte";
-  import { setActiveVault, addVault, removeVault } from "$lib/commands";
+  import {
+    setActiveVault,
+    addVault,
+    removeVault,
+    initPasswordStore,
+    gitClone,
+    listGpgSecretKeys,
+  } from "$lib/commands";
   import { ui } from "$lib/stores/ui.svelte";
-  import type { Vault } from "$lib/types";
+  import type { Vault, GpgKey } from "$lib/types";
 
-  let showAddForm = $state(false);
+  type AddMode = null | "choose" | "init" | "clone";
+
+  let addMode = $state<AddMode>(null);
+  let busy = $state(false);
+
+  // Shared fields
   let newName = $state("");
   let newPath = $state("");
+
+  // Init-specific
+  let secretKeys = $state<GpgKey[]>([]);
+  let selectedKeyId = $state<string | null>(null);
+  let keysLoading = $state(false);
+
+  // Clone-specific
+  let cloneUrl = $state("");
+
+  function resetForm() {
+    addMode = null;
+    newName = "";
+    newPath = "";
+    selectedKeyId = null;
+    cloneUrl = "";
+    secretKeys = [];
+  }
+
+  async function openAddForm() {
+    addMode = addMode ? null : "choose";
+  }
+
+  async function pickInit() {
+    addMode = "init";
+    keysLoading = true;
+    try {
+      secretKeys = await listGpgSecretKeys();
+      if (secretKeys.length === 1) {
+        selectedKeyId = secretKeys[0].id;
+      }
+    } catch (e) {
+      ui.notify(String(e), "error");
+    } finally {
+      keysLoading = false;
+    }
+  }
 
   async function switchVault(id: string | null) {
     try {
@@ -20,19 +68,40 @@
     }
   }
 
-  async function handleAdd(e: Event) {
+  async function handleInit(e: Event) {
     e.preventDefault();
-    if (!newName.trim() || !newPath.trim()) return;
+    if (!newName.trim() || !newPath.trim() || !selectedKeyId) return;
+    busy = true;
     try {
       const vault = await addVault(newName.trim(), newPath.trim());
       await settings.load();
       await switchVault(vault.id);
-      newName = "";
-      newPath = "";
-      showAddForm = false;
-      ui.notify(`Vault "${vault.name}" added`);
+      await initPasswordStore([selectedKeyId]);
+      await passwords.refresh();
+      ui.notify(`Vault "${vault.name}" initialized`);
+      resetForm();
     } catch (e) {
       ui.notify(String(e), "error");
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function handleClone(e: Event) {
+    e.preventDefault();
+    if (!newName.trim() || !newPath.trim() || !cloneUrl.trim()) return;
+    busy = true;
+    try {
+      await gitClone(cloneUrl.trim(), newPath.trim());
+      const vault = await addVault(newName.trim(), newPath.trim());
+      await settings.load();
+      await switchVault(vault.id);
+      ui.notify(`Vault "${vault.name}" cloned`);
+      resetForm();
+    } catch (e) {
+      ui.notify(String(e), "error");
+    } finally {
+      busy = false;
     }
   }
 
@@ -57,10 +126,10 @@
     <span>Vaults</span>
     <button
       class="text-zinc-500 hover:text-zinc-300 transition-colors"
-      onclick={() => (showAddForm = !showAddForm)}
+      onclick={openAddForm}
       title="Add vault"
     >
-      {showAddForm ? "−" : "+"}
+      {addMode ? "−" : "+"}
     </button>
   </div>
 
@@ -95,8 +164,23 @@
     </div>
   {/each}
 
-  {#if showAddForm}
-    <form onsubmit={handleAdd} class="px-2 space-y-2 pt-1">
+  {#if addMode === "choose"}
+    <div class="px-2 pt-1 space-y-1">
+      <button
+        class="w-full text-left px-2 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+        onclick={pickInit}
+      >
+        Initialize new store
+      </button>
+      <button
+        class="w-full text-left px-2 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+        onclick={() => (addMode = "clone")}
+      >
+        Clone from git
+      </button>
+    </div>
+  {:else if addMode === "init"}
+    <form onsubmit={handleInit} class="px-2 space-y-2 pt-1">
       <input
         type="text"
         bind:value={newName}
@@ -111,13 +195,77 @@
         class="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-zinc-500"
         required
       />
-      <button
-        type="submit"
-        disabled={!newName.trim() || !newPath.trim()}
-        class="w-full px-2 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 rounded transition-colors"
-      >
-        Add Vault
-      </button>
+      {#if keysLoading}
+        <div class="text-zinc-500 text-xs py-1">Loading keys...</div>
+      {:else if secretKeys.length === 0}
+        <div class="text-zinc-500 text-xs py-1">No GPG secret keys found.</div>
+      {:else}
+        <select
+          bind:value={selectedKeyId}
+          class="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500"
+        >
+          <option value={null} disabled selected>Select GPG key...</option>
+          {#each secretKeys as key}
+            <option value={key.id}>{key.uid} ({key.id})</option>
+          {/each}
+        </select>
+      {/if}
+      <div class="flex gap-1">
+        <button
+          type="submit"
+          disabled={!newName.trim() || !newPath.trim() || !selectedKeyId || busy}
+          class="flex-1 px-2 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 rounded transition-colors"
+        >
+          {busy ? "Initializing..." : "Initialize"}
+        </button>
+        <button
+          type="button"
+          class="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+          onclick={() => (addMode = "choose")}
+        >
+          Back
+        </button>
+      </div>
+    </form>
+  {:else if addMode === "clone"}
+    <form onsubmit={handleClone} class="px-2 space-y-2 pt-1">
+      <input
+        type="text"
+        bind:value={newName}
+        placeholder="Vault name"
+        class="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500"
+        required
+      />
+      <input
+        type="text"
+        bind:value={cloneUrl}
+        placeholder="git@github.com:user/pass-store.git"
+        class="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-zinc-500"
+        required
+      />
+      <input
+        type="text"
+        bind:value={newPath}
+        placeholder="Clone to path"
+        class="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-zinc-500"
+        required
+      />
+      <div class="flex gap-1">
+        <button
+          type="submit"
+          disabled={!newName.trim() || !newPath.trim() || !cloneUrl.trim() || busy}
+          class="flex-1 px-2 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 rounded transition-colors"
+        >
+          {busy ? "Cloning..." : "Clone"}
+        </button>
+        <button
+          type="button"
+          class="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+          onclick={() => (addMode = "choose")}
+        >
+          Back
+        </button>
+      </div>
     </form>
   {/if}
 </div>

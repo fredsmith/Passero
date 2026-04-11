@@ -1,21 +1,6 @@
 <script lang="ts">
   import { settings } from "$lib/stores/settings.svelte";
-  import { listGpgKeys, getStoreGpgId } from "$lib/commands";
-  import type { GpgKey } from "$lib/types";
   import { ui } from "$lib/stores/ui.svelte";
-  import { onMount } from "svelte";
-
-  let gpgKeys = $state<GpgKey[]>([]);
-  let currentGpgId = $state("");
-
-  onMount(async () => {
-    try {
-      gpgKeys = await listGpgKeys();
-      currentGpgId = await getStoreGpgId();
-    } catch {
-      // GPG may not be configured yet
-    }
-  });
 
   async function handleSave() {
     await settings.save();
@@ -69,7 +54,7 @@
     <section class="space-y-3">
       <h3 class="text-sm font-medium text-zinc-400 uppercase tracking-wide">Password Store</h3>
       <div>
-        <label class="text-xs text-zinc-500" for="store-dir">Store directory</label>
+        <label class="text-xs text-zinc-500" for="store-dir">Default store directory</label>
         <input
           id="store-dir"
           type="text"
@@ -89,25 +74,6 @@
           class="mt-1 w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500"
         />
       </div>
-    </section>
-
-    <section class="space-y-3">
-      <h3 class="text-sm font-medium text-zinc-400 uppercase tracking-wide">GPG Key</h3>
-      {#if currentGpgId}
-        <p class="text-sm text-zinc-400">Current store key: <code class="text-zinc-200">{currentGpgId}</code></p>
-      {/if}
-      {#if gpgKeys.length > 0}
-        <div class="space-y-1">
-          {#each gpgKeys as key}
-            <div class="bg-zinc-800 rounded px-3 py-2 text-sm">
-              <div class="text-zinc-200">{key.uid}</div>
-              <div class="text-zinc-500 text-xs font-mono">{key.id}</div>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <p class="text-sm text-zinc-500">No GPG keys found</p>
-      {/if}
     </section>
 
     <button
