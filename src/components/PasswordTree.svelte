@@ -3,6 +3,7 @@
   import { ui } from "$lib/stores/ui.svelte";
   import { filterTree } from "$lib/utils";
   import PasswordTreeNode from "./PasswordTreeNode.svelte";
+  import EmptyStoreSetup from "./EmptyStoreSetup.svelte";
 
   const filteredTree = $derived(filterTree(passwords.tree, ui.searchQuery));
 </script>
@@ -13,13 +14,13 @@
   {:else if passwords.error}
     <div class="text-red-400 text-sm p-4">{passwords.error}</div>
   {:else if filteredTree.length === 0}
-    <div class="text-zinc-500 text-sm p-4">
-      {#if ui.searchQuery}
+    {#if ui.searchQuery}
+      <div class="text-zinc-500 text-sm p-4">
         No matches for "{ui.searchQuery}"
-      {:else}
-        No passwords found. Is your password store initialized?
-      {/if}
-    </div>
+      </div>
+    {:else}
+      <EmptyStoreSetup />
+    {/if}
   {:else}
     {#each filteredTree as entry (entry.path)}
       <PasswordTreeNode {entry} depth={0} />

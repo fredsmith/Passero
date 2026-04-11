@@ -9,8 +9,33 @@
   }: { editPath: string | null; onclose: () => void } = $props();
 
   let path = $state(editPath ?? "");
-  let content = $state(passwords.selectedContent ?? "");
+  let content = $state(editPath ? (passwords.selectedContent ?? "") : "");
   let saving = $state(false);
+
+  // Generator
+  let genLength = $state(24);
+  let genSymbols = $state(true);
+  let generating = $state(false);
+
+  function randomPassword(length: number, symbols: boolean): string {
+    const alpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const chars = symbols ? alpha + "!@#$%^&*()-_=+[]{}|;:,.<>?" : alpha;
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    return Array.from(array, (b) => chars[b % chars.length]).join("");
+  }
+
+  function handleGenerate() {
+    const pw = randomPassword(genLength, genSymbols);
+    // Replace first line, keep the rest (metadata lines)
+    const lines = content.split("\n");
+    if (lines.length > 1 && lines.slice(1).some((l) => l.trim())) {
+      lines[0] = pw;
+      content = lines.join("\n");
+    } else {
+      content = pw;
+    }
+  }
 
   async function handleSave() {
     if (!path.trim()) return;
@@ -48,7 +73,27 @@
     </div>
 
     <div>
-      <label class="text-xs text-zinc-500 uppercase tracking-wide" for="entry-content">Content</label>
+      <div class="flex items-center justify-between">
+        <label class="text-xs text-zinc-500 uppercase tracking-wide" for="entry-content">Content</label>
+        <div class="flex items-center gap-2">
+          <label class="flex items-center gap-1 text-[11px] text-zinc-500">
+            <input type="number" bind:value={genLength} min={8} max={128}
+              class="w-12 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[11px] text-zinc-300 focus:outline-none focus:border-zinc-500"
+            />
+            chars
+          </label>
+          <label class="flex items-center gap-1 text-[11px] text-zinc-500">
+            <input type="checkbox" bind:checked={genSymbols} class="rounded" />
+            symbols
+          </label>
+          <button
+            class="px-2 py-0.5 text-[11px] bg-zinc-700 hover:bg-zinc-600 rounded transition-colors"
+            onclick={handleGenerate}
+          >
+            Generate
+          </button>
+        </div>
+      </div>
       <textarea
         id="entry-content"
         bind:value={content}

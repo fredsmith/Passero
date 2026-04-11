@@ -9,23 +9,14 @@
     publishGpgKey,
     setGpgKeyTrust,
     deleteGpgKey,
-    getStoreGpgId,
-    listRecipients,
-    addRecipient,
-    removeRecipient,
   } from "$lib/commands";
   import type { GpgKey } from "$lib/types";
   import { ui } from "$lib/stores/ui.svelte";
-  import { passwords } from "$lib/stores/passwords.svelte";
   import { onMount } from "svelte";
 
   let publicKeys = $state<GpgKey[]>([]);
   let secretKeys = $state<GpgKey[]>([]);
-  let currentGpgId = $state("");
-  let recipients = $state<string[]>([]);
   let loading = $state(true);
-  let addRecipientId = $state("");
-  let recipientBusy = $state(false);
 
   // Generate key form
   let showGenerate = $state(false);
@@ -58,11 +49,9 @@
   async function refresh() {
     loading = true;
     try {
-      [publicKeys, secretKeys, currentGpgId, recipients] = await Promise.all([
+      [publicKeys, secretKeys] = await Promise.all([
         listGpgKeys(),
         listGpgSecretKeys(),
-        getStoreGpgId().catch(() => ""),
-        listRecipients().catch(() => []),
       ]);
     } catch (e) {
       ui.notify(String(e), "error");
@@ -157,38 +146,6 @@
     }
   }
 
-  async function handleAddRecipient(e: Event) {
-    e.preventDefault();
-    if (!addRecipientId.trim()) return;
-    recipientBusy = true;
-    try {
-      recipients = await addRecipient(addRecipientId.trim());
-      addRecipientId = "";
-      ui.notify("Recipient added, store re-encrypted");
-      currentGpgId = recipients.join(", ");
-      await passwords.refresh();
-    } catch (e) {
-      ui.notify(String(e), "error");
-    } finally {
-      recipientBusy = false;
-    }
-  }
-
-  async function handleRemoveRecipient(gpgId: string) {
-    if (!confirm(`Remove ${gpgId} from recipients? The store will be re-encrypted.`)) return;
-    recipientBusy = true;
-    try {
-      recipients = await removeRecipient(gpgId);
-      ui.notify("Recipient removed, store re-encrypted");
-      currentGpgId = recipients.join(", ");
-      await passwords.refresh();
-    } catch (e) {
-      ui.notify(String(e), "error");
-    } finally {
-      recipientBusy = false;
-    }
-  }
-
   async function handleDelete(key: GpgKey) {
     const hasSecret = isSecretKey(key);
     const msg = hasSecret
@@ -230,49 +187,6 @@
       </button>
     </div>
   </div>
-
-  {#if recipients.length > 0 || currentGpgId}
-    <div class="mb-6 p-4 bg-zinc-800/50 border border-zinc-700 rounded-lg">
-      <h3 class="text-sm font-medium mb-3">Store Recipients</h3>
-      <p class="text-xs text-zinc-500 mb-3">
-        {#if recipientBusy}
-          Re-encrypting store...
-        {:else}
-          Keys the password store is encrypted to. Adding or removing recipients re-encrypts all entries.
-        {/if}
-      </p>
-      <div class="space-y-1 mb-3">
-        {#each recipients as gpgId}
-          <div class="flex items-center justify-between bg-zinc-800 rounded px-3 py-1.5">
-            <code class="text-sm text-zinc-200">{gpgId}</code>
-            <button
-              class="text-xs text-zinc-500 hover:text-red-400 transition-colors"
-              onclick={() => handleRemoveRecipient(gpgId)}
-              disabled={recipients.length <= 1 || recipientBusy}
-              title={recipients.length <= 1 ? "Cannot remove the last recipient" : "Remove recipient"}
-            >
-              Remove
-            </button>
-          </div>
-        {/each}
-      </div>
-      <form onsubmit={handleAddRecipient} class="flex gap-2">
-        <input
-          type="text"
-          bind:value={addRecipientId}
-          placeholder="GPG key ID or email"
-          class="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
-        />
-        <button
-          type="submit"
-          disabled={!addRecipientId.trim() || recipientBusy}
-          class="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded transition-colors"
-        >
-          {recipientBusy ? "Working..." : "Add"}
-        </button>
-      </form>
-    </div>
-  {/if}
 
   {#if showGenerate}
     <div class="mb-6 p-4 bg-zinc-800/50 border border-zinc-700 rounded-lg">
@@ -427,9 +341,6 @@
                 </span>
                 {#if isSecretKey(key)}
                   <span class="text-green-500">Secret key available</span>
-                {/if}
-                {#if currentGpgId && (key.id.endsWith(currentGpgId) || currentGpgId.endsWith(key.id) || key.fingerprint === currentGpgId)}
-                  <span class="text-blue-400">Store key</span>
                 {/if}
               </div>
             </div>
