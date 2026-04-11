@@ -82,9 +82,12 @@ jobs:
         run: |
           VERSION="${{ needs.version.outputs.version }}"
 
-          # Windows MSI requires major ≤ 255; encode as YY.MDD.N
+          # Windows MSI requires each version segment ≤ 255.
+          # CalVer YYYY.M.D-N can overflow (e.g. 4.11 → 411 > 255).
+          # Encode as M.D.N — each segment guaranteed ≤ 255.
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            TAURI_VERSION=$(echo "$VERSION" | sed -E 's/^20([0-9]+)\.([0-9]+)\.([0-9]+)-([0-9]+)$/\1.\2\3.\4/')
+            IFS='.-' read -r _YEAR MONTH DAY BUILD <<< "$VERSION"
+            TAURI_VERSION="${MONTH}.${DAY}.${BUILD}"
           else
             TAURI_VERSION="$VERSION"
           fi
