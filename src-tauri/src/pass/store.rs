@@ -217,3 +217,170 @@ impl PassStore {
         self.show(path).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn make_test_store(dir: &Path) -> PassStore {
+        PassStore {
+            pass_binary: PathBuf::from("pass"),
+            store_dir: dir.to_path_buf(),
+        }
+    }
+
+    #[test]
+    fn build_tree_empty_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = make_test_store(tmp.path());
+        let tree = store.build_tree().unwrap();
+        assert!(tree.is_empty());
+    }
+
+    #[test]
+    fn build_tree_nonexistent_dir() {
+        let store = PassStore {
+            pass_binary: PathBuf::from("pass"),
+            store_dir: PathBuf::from("/nonexistent/path/that/does/not/exist"),
+        };
+        let tree = store.build_tree().unwrap();
+        assert!(tree.is_empty());
+    }
+
+    #[test]
+    fn build_tree_finds_gpg_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("email.gpg"), b"encrypted").unwrap();
+        fs::write(tmp.path().join("bank.gpg"), b"encrypted").unwrap();
+
+        let store = make_test_store(tmp.path());
+        let tree = store.build_tree().unwrap();
+
+        assert_eq!(tree.len(), 2);
+        // Sorted alphabetically
+        assert_eq!(tree[0].name, "bank");
+        assert_eq!(tree[0].path, "bank");
+        assert!(!tree[0].is_dir);
+        assert_eq!(tree[1].name, "email");
+        assert_eq!(tree[1].path, "email");
+        assert!(!tree[1].is_dir);
+    }
+
+    #[test]
+    fn build_tree_strips_gpg_extension() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("social/twitter.gpg"), b"").unwrap_err(); // dir doesn't exist yet
+        fs::create_dir(tmp.path().join("social")).unwrap();
+        fs::write(tmp.path().join("social/twitter.gpg"), b"encrypted").unwrap();
+
+        let store = make_test_store(tmp.path());
+        let tree = store.build_tree().unwrap();
+
+        assert_eq!(tree.len(), 1);
+        assert!(tree[0].is_dir);
+        assert_eq!(tree[0].name, "social");
+        assert_eq!(tree[0].children.len(), 1);
+        assert_eq!(tree[0].children[0].name, "twitter");
+        assert_eq!(tree[0].children[0].path, "social/twitter");
+    }
+
+    #[test]
+    fn build_tree_skips_hidden_files_and_dirs() {
+        let tmp = tempfile::tempdir().unwrap();
+        // These should be ignored
+        fs::create_dir(tmp.path().join(".git")).unwrap();
+        fs::write(tmp.path().join(".git/config"), b"").unwrap();
+        fs::write(tmp.path().join(".gpg-id"), b"0xABC123").unwrap();
+        // This should be found
+        fs::write(tmp.path().join("login.gpg"), b"encrypted").unwrap();
+
+        let store = make_test_store(tmp.path());
+        let tree = store.build_tree().unwrap();
+
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].name, "login");
+    }
+
+    #[test]
+    fn build_tree_ignores_non_gpg_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("notes.txt"), b"not a password").unwrap();
+        fs::write(tmp.path().join("readme.md"), b"info").unwrap();
+        fs::write(tmp.path().join("actual.gpg"), b"encrypted").unwrap();
+
+        let store = make_test_store(tmp.path());
+        let tree = store.build_tree().unwrap();
+
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].name, "actual");
+    }
+
+    #[test]
+    fn build_tree_dirs_sorted_before_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("aaa.gpg"), b"encrypted").unwrap();
+        fs::create_dir(tmp.path().join("zzz")).unwrap();
+        fs::write(tmp.path().join("zzz/entry.gpg"), b"encrypted").unwrap();
+
+        let store = make_test_store(tmp.path());
+        let tree = store.build_tree().unwrap();
+
+        assert_eq!(tree.len(), 2);
+        // Directories come first regardless of alpha order
+        assert!(tree[0].is_dir);
+        assert_eq!(tree[0].name, "zzz");
+        assert!(!tree[1].is_dir);
+        assert_eq!(tree[1].name, "aaa");
+    }
+
+    #[test]
+    fn build_tree_nested_structure() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join("work/servers")).unwrap();
+        fs::write(tmp.path().join("work/email.gpg"), b"encrypted").unwrap();
+        fs::write(tmp.path().join("work/servers/prod.gpg"), b"encrypted").unwrap();
+        fs::write(tmp.path().join("personal.gpg"), b"encrypted").unwrap();
+
+        let store = make_test_store(tmp.path());
+        let tree = store.build_tree().unwrap();
+
+        // Top level: work/ dir first, then personal file
+        assert_eq!(tree.len(), 2);
+        assert!(tree[0].is_dir);
+        assert_eq!(tree[0].name, "work");
+        assert!(!tree[1].is_dir);
+        assert_eq!(tree[1].name, "personal");
+
+        // work/ has servers/ dir then email file
+        let work = &tree[0];
+        assert_eq!(work.children.len(), 2);
+        assert!(work.children[0].is_dir);
+        assert_eq!(work.children[0].name, "servers");
+        assert!(!work.children[1].is_dir);
+        assert_eq!(work.children[1].name, "email");
+        assert_eq!(work.children[1].path, "work/email");
+
+        // work/servers/ has prod
+        let servers = &work.children[0];
+        assert_eq!(servers.children.len(), 1);
+        assert_eq!(servers.children[0].name, "prod");
+        assert_eq!(servers.children[0].path, "work/servers/prod");
+    }
+
+    #[test]
+    fn build_tree_empty_subdirs_not_shown() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join("empty_folder")).unwrap();
+        fs::write(tmp.path().join("login.gpg"), b"encrypted").unwrap();
+
+        let store = make_test_store(tmp.path());
+        let tree = store.build_tree().unwrap();
+
+        // Empty dir still shows up (it's a valid folder in the store)
+        assert_eq!(tree.len(), 2);
+        assert!(tree[0].is_dir);
+        assert_eq!(tree[0].name, "empty_folder");
+        assert!(tree[0].children.is_empty());
+    }
+}

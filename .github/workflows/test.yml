@@ -29,8 +29,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Rust check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Rust test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Svelte type-check
         run: npx svelte-check --tsconfig ./tsconfig.json
